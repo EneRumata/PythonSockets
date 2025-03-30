@@ -37,8 +37,8 @@ while True:
     sсreen.fill((0, 127, 0)) # Заполняем экран зелёным
 
     for i in client.players:
-        print(i)
-        player = Player((i["x"], i["y"]))
+        ##print(i)
+        player = Player((i["x"], i["y"]),i["id"])
         sсreen.blit(player.image, player.rect) # Рисуем игрока
 
     pygame.display.update() # Обновляем дисплей

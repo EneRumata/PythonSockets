@@ -37,11 +37,26 @@ class Server:
             self.data = 0
             
             self.thread = Thread(target=self.handleClientThreadPack, args=(self.conn,)).start() # Запускаем в новом потоке проверку действий игрока
+
+        def jsonFixError(self):
+            self.data="["+self.data.decode('utf-8')+"]"
+            i = 2
+            while i<len(self.data)-1:
+                if self.data[i]=="}" and self.data[i+1]=="{":
+                    self.data=self.data[:i+1]+","+self.data[(i+1):]
+                    i+=3
+                else:
+                    i+=1
             
         def handleClientThreadPack(self, conn): 
             while True:
                 try:
                     self.data = self.conn.recv(1024) # ждем запросов от клиента
+                    self.jsonFixError()
+                    ##else:
+                    ##    print("")
+                    ##    print(self.data)
+                    ##    print("")
 
                     if not self.data: # если запросы перестали поступать, то ждём несколько итераций
                         if self.waiting>10:
@@ -52,29 +67,30 @@ class Server:
                         self.waiting = 0
 
                     # загружаем данные в json формате
-                    self.data = json.loads(self.data.decode('utf-8'))
+                    self.data = json.loads(self.data)
+                    
 
                     # запрос на получение игроков на сервере
-                    if self.data["request"] == "get_players":
-                        answer_to_players = []
-                        for i in self.players:
-                            answer_to_players.append({"x":i.x,"y":i.y,"id":i.id})
+                    for d in self.data:
+                        if d["request"] == "get_players":
+                            answer_to_players = []
+                            for i in self.players:
+                                answer_to_players.append({"x":i.x,"y":i.y,"id":i.id})
 
-                        self.conn.sendall(bytes(json.dumps({
-                            "response": answer_to_players
-                        }), 'UTF-8'))
+                            self.conn.sendall(bytes(json.dumps({"response": answer_to_players}), 'UTF-8'))
+                        else:
+                            print(self.data)
+                        # движение
+                        if d["request"] == "move":
 
-                    # движение
-                    if self.data["request"] == "move":
-
-                        if self.data["move"] == "left":
-                            self.x -= 1
-                        if self.data["move"] == "right":
-                            self.x += 1
-                        if self.data["move"] == "up":
-                            self.y -= 1
-                        if self.data["move"] == "down":
-                            self.y += 1
+                            if d["move"] == "left":
+                                self.x -= 1
+                            if d["move"] == "right":
+                                self.x += 1
+                            if d["move"] == "up":
+                                self.y -= 1
+                            if d["move"] == "down":
+                                self.y += 1
                 except Exception as e:
                     print(e)
                     break
@@ -86,17 +102,20 @@ class Server:
             if True:##not len(self.players) >= self.max_players: # проверяем не превышен ли лимит
                  # одобряем подключение, получаем взамен адрес и другую информацию о клиенте
                 conn, addr = self.sock.accept()
-     
+                b = True ## нужно ли создавать новый объект клиент-обработчика
                 print("New connection", addr)
                 print("conn", conn)
 
                 for i in self.players:
-                    if i.addr == addr:
-                        i.thread = Thread(target=self.handleClientThreadPack, args=(conn,)).start() # Запускаем в новом потоке проверку действий игрока
-                        return
+                    if i.addr[0] == addr[0]:
+                        if not(i.thread):
+                            b = False
+                            i.addr = addr
+                            i.conn = conn
+                            i.thread = Thread(target=i.handleClientThreadPack, args=(conn,)).start() # Запускаем в новом потоке проверку действий игрока
                     
-                print("self.players start is ", self.players)
-                self.players.append(self.ClientThreadPack(self.players,conn,addr,400,300,len(self.players)))# добавляем его в массив игроков
+                if b:
+                    self.players.append(self.ClientThreadPack(self.players,conn,addr,400,300,len(self.players)))# добавляем его в массив игроков
 
 if __name__ == "__main__":
     server = Server((HOST, PORT), MAX_PLAYERS)
